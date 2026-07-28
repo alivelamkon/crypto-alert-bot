@@ -1,30 +1,36 @@
 import os
-
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup
-)
-
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
     CallbackQueryHandler,
-    MessageHandler,
     ContextTypes,
-    filters,
-    ConversationHandler
+)
+from supabase import create_client
+
+
+# =====================
+# ENV VARIABLES
+# =====================
+
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+
+# =====================
+# SUPABASE CONNECTION
+# =====================
+
+supabase = create_client(
+    SUPABASE_URL,
+    SUPABASE_KEY
 )
 
-from database import init_db, get_user_alerts
-from binance import check_symbol, get_price
 
-
-TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-
-
-SYMBOL = 1
-
+# =====================
+# START MENU
+# =====================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -32,114 +38,80 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [
             InlineKeyboardButton(
                 "➕ ساخت آلارم",
-                callback_data="create"
+                callback_data="create_alert"
             )
         ],
         [
             InlineKeyboardButton(
-                "🔔 آلارم‌های من",
+                "📋 آلارم‌های من",
                 callback_data="my_alerts"
             )
-        ]
+        ],
     ]
 
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     await update.message.reply_text(
-        "🤖 Crypto Alert Bot\n\n"
-        "آماده ساخت آلارم کریپتو هستم.",
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        "سلام 👋\nربات آلارم کریپتو آماده است.",
+        reply_markup=reply_markup
     )
 
 
-async def my_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# =====================
+# BUTTON HANDLER
+# =====================
+
+async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
     await query.answer()
 
-    alerts = get_user_alerts(
-        query.from_user.id
-    )
+    user_id = str(query.from_user.id)
 
-    if not alerts:
-        text = "🔔 هیچ آلارمی ندارید."
-    else:
-        text = "🔔 آلارم‌های شما:\n\n"
+    if query.data == "create_alert":
 
-        for alert in alerts:
-            text += (
-                f"#{alert[0]} {alert[2]}\n"
-                f"🎯 {alert[3]}\n"
-                f"📌 {alert[9]}\n\n"
-            )
-
-    await query.edit_message_text(text)
-
-
-async def create_alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    query = update.callback_query
-    await query.answer()
-
-    await query.edit_message_text(
-        "نام ارز را وارد کن:\n\n"
-        "مثال:\n"
-        "BTC"
-    )
-
-    return SYMBOL
-
-
-async def receive_symbol(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    symbol = update.message.text.upper()
-
-    result = check_symbol(symbol)
-
-    if not result:
-        await update.message.reply_text(
-            "❌ این ارز در Binance پیدا نشد.\n"
-            "دوباره وارد کن:"
+        await query.edit_message_text(
+            "➕ ساخت آلارم\n\n"
+            "این بخش در مرحله بعد تکمیل می‌شود."
         )
-        return SYMBOL
-
-    price = get_price(result)
-
-    context.user_data["symbol"] = result
-
-    await update.message.reply_text(
-        f"✅ {result} پیدا شد.\n\n"
-        f"💰 قیمت فعلی:\n"
-        f"{price} USDT\n\n"
-        "مرحله بعدی در نسخه بعدی اضافه می‌شود."
-    )
-
-    return ConversationHandler.END
 
 
+    elif query.data == "my_alerts":
+
+        result = (
+            supabase
+            .table("alerts")
+            .select("*")
+            .eq("user_id", user_id)
+            .execute()
+        )
+
+        alerts = result.data
+
+        if not alerts:
+            text = "📭 هیچ آلارمی ثبت نشده."
+        else:
+            text = "📋 آلارم‌های شما:\n\n"
+
+            for alert in alerts:
+                text += (
+                    f"🔹 {alert['symbol']}\n"
+                    f"💰 {alert['target_price']}\n"
+                    f"⏱ {alert['timeframe']}\n\n"
+                )
+
+        await query.edit_message_text(text)
+
+
+# =====================
+# MAIN
+# =====================
 
 def main():
 
-    init_db()
-
-    app = Application.builder().token(TOKEN).build()
-
-
-    conv = ConversationHandler(
-        entry_points=[
-            CallbackQueryHandler(
-                create_alert,
-                pattern="^create$"
-            )
-        ],
-        states={
-            SYMBOL: [
-                MessageHandler(
-                    filters.TEXT & ~filters.COMMAND,
-                    receive_symbol
-                )
-            ]
-        },
-        fallbacks=[]
-    )
+    app = Application.builder() \
+        .token(BOT_TOKEN) \
+        .build()
 
 
     app.add_handler(
@@ -150,17 +122,13 @@ def main():
     )
 
     app.add_handler(
-        CallbackQueryHandler(
-            my_alerts,
-            pattern="^my_alerts$"
-        )
+        CallbackQueryHandler(buttons)
     )
 
-    app.add_handler(conv)
 
+    print("Bot started...")
 
     app.run_polling()
-
 
 
 if __name__ == "__main__":
