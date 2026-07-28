@@ -20,7 +20,8 @@ def init_db():
         target_price REAL NOT NULL,
         direction TEXT NOT NULL,
         trigger_type TEXT NOT NULL,
-        timeframe TEXT,
+        timeframe TEXT NOT NULL,
+        rsi_enabled INTEGER DEFAULT 1,
         repeat_mode TEXT DEFAULT 'once',
         status TEXT DEFAULT 'active',
         created_at TEXT
@@ -38,6 +39,7 @@ def add_alert(
     direction,
     trigger_type,
     timeframe,
+    rsi_enabled=1,
     repeat_mode="once"
 ):
     conn = connect()
@@ -52,10 +54,11 @@ def add_alert(
         direction,
         trigger_type,
         timeframe,
+        rsi_enabled,
         repeat_mode,
         created_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """,
     (
         user_id,
@@ -64,6 +67,7 @@ def add_alert(
         direction,
         trigger_type,
         timeframe,
+        rsi_enabled,
         repeat_mode,
         datetime.now().isoformat()
     ))
@@ -81,7 +85,8 @@ def get_user_alerts(user_id):
     FROM alerts
     WHERE user_id=?
     ORDER BY id DESC
-    """, (user_id,))
+    """,
+    (user_id,))
 
     alerts = cur.fetchall()
 
