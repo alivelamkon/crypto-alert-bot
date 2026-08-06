@@ -13,9 +13,6 @@ HEADERS = {
 
 RSI_PERIOD = 14
 
-# کش برای هر ترکیب symbol+timeframe -> فقط یک بار در هر اجرا از بایننس گرفته میشه
-_KLINES_CACHE = {}
-
 
 def get_active_alarms():
     url = f"{SUPABASE_URL}/rest/v1/alarms?active=eq.true"
@@ -30,10 +27,10 @@ def update_alarm(alarm_id, fields):
     r.raise_for_status()
 
 
-def get_klines_cached(symbol, interval, limit=100):
+def get_klines_cached(cache, symbol, interval, limit=100):
     key = (symbol, interval)
-    if key in _KLINES_CACHE:
-        return _KLINES_CACHE[key]
+    if key in cache:
+        return cache[key]
 
     url = "https://api.binance.com/api/v3/klines"
     params = {"symbol": symbol, "interval": interval, "limit": limit}
@@ -41,7 +38,7 @@ def get_klines_cached(symbol, interval, limit=100):
     r.raise_for_status()
     klines = r.json()
 
-    _KLINES_CACHE[key] = klines
+    cache[key] = klines
     return klines
 
 
@@ -142,8 +139,8 @@ def check_touch(alarm, open_candle, rsi_value):
         fire_alert(alarm, target, rsi_value)
 
 
-def check_alarm(alarm):
-    klines = get_klines_cached(alarm["symbol"], alarm["timeframe"], limit=100)
+def check_alarm(cache, alarm):
+    klines = get_klines_cached(cache, alarm["symbol"], alarm["timeframe"], limit=100)
     if len(klines) < 2:
         return
 
@@ -161,14 +158,20 @@ def check_alarm(alarm):
         check_touch(alarm, open_candle, rsi_value)
 
 
-def main():
+def run_price_check():
+    """نقطه ورود اصلی - از bot.py صدا زده میشه"""
+    cache = {}
     alarms = get_active_alarms()
+    checked = 0
     for alarm in alarms:
         try:
-            check_alarm(alarm)
+            check_alarm(cache, alarm)
+            checked += 1
         except Exception as e:
             print(f"خطا در چک آلارم {alarm.get('id')}: {e}")
+    return checked
 
 
 if __name__ == "__main__":
-    main()
+    n = run_price_check()
+    print(f"{n} آلارم چک شد")
