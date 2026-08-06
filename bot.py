@@ -22,6 +22,25 @@ TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 RENDER_EXTERNAL_URL = os.environ["RENDER_EXTERNAL_URL"]
 PORT = int(os.environ.get("PORT", 10000))
 
+# ---------- import هوشمند برای بخش‌هایی که هنوز ساخته نشدن ----------
+try:
+    from portfolio import register_portfolio_handlers
+    HAS_PORTFOLIO = True
+except ImportError:
+    HAS_PORTFOLIO = False
+
+try:
+    from journal import register_journal_handlers
+    HAS_JOURNAL = True
+except ImportError:
+    HAS_JOURNAL = False
+
+try:
+    from calculator import register_calculator_handlers
+    HAS_CALCULATOR = True
+except ImportError:
+    HAS_CALCULATOR = False
+
 # ---------- منوی پایین ثابت (Reply Keyboard) ----------
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
     [
@@ -45,13 +64,26 @@ def build_application():
 
     app.add_handler(CommandHandler("start", start))
 
-    # آلارم - فعال
+    # آلارم - همیشه فعال
     register_alarms_handlers(app)
 
-    # بقیه دکمه‌های منو - فعلاً placeholder
-    app.add_handler(MessageHandler(filters.Regex("^💼 پورتفولیو$"), coming_soon))
-    app.add_handler(MessageHandler(filters.Regex("^📝 ژورنال$"), coming_soon))
-    app.add_handler(MessageHandler(filters.Regex("^🧮 ماشین حساب$"), coming_soon))
+    # پورتفولیو - اگه فایلش موجود بود فعال، وگرنه پیام "به‌زودی"
+    if HAS_PORTFOLIO:
+        register_portfolio_handlers(app)
+    else:
+        app.add_handler(MessageHandler(filters.Regex("^💼 پورتفولیو$"), coming_soon))
+
+    # ژورنال - اگه فایلش موجود بود فعال، وگرنه پیام "به‌زودی"
+    if HAS_JOURNAL:
+        register_journal_handlers(app)
+    else:
+        app.add_handler(MessageHandler(filters.Regex("^📝 ژورنال$"), coming_soon))
+
+    # ماشین حساب - اگه فایلش موجود بود فعال، وگرنه پیام "به‌زودی"
+    if HAS_CALCULATOR:
+        register_calculator_handlers(app)
+    else:
+        app.add_handler(MessageHandler(filters.Regex("^🧮 ماشین حساب$"), coming_soon))
 
     return app
 
